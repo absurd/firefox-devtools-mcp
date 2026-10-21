@@ -7,6 +7,7 @@ import type { Browser, BrowsingContext, Network, Script } from 'webdriver-bidi-p
 import { FirefoxCore } from './core.js';
 import { BiDiFacade } from './bidi.js';
 import { logDebug } from '../utils/logger.js';
+import { NO_SELECTED_PAGE_MESSAGE } from '../utils/errors.js';
 import { ConsoleEvents, NetworkEvents, DebuggingEvents, DownloadEvents } from './events/index.js';
 import type { NetworkBodyResult } from './events/network.js';
 import { DomInteractions } from './dom.js';
@@ -58,7 +59,7 @@ export class FirefoxClient {
   private getContext(): BrowsingContext.BrowsingContext {
     const context = this.core.getCurrentContextId();
     if (!context) {
-      throw new Error('No active browsing context');
+      throw new Error(NO_SELECTED_PAGE_MESSAGE);
     }
     return context;
   }
@@ -221,6 +222,7 @@ export class FirefoxClient {
     if (!this.pages) {
       throw new Error('Not connected');
     }
+    this.getContext();
     return await this.pages.navigateBack();
   }
 
@@ -228,6 +230,7 @@ export class FirefoxClient {
     if (!this.pages) {
       throw new Error('Not connected');
     }
+    this.getContext();
     return await this.pages.navigateForward();
   }
 
@@ -235,6 +238,7 @@ export class FirefoxClient {
     if (!this.pages) {
       throw new Error('Not connected');
     }
+    this.getContext();
     return await this.pages.setViewportSize(width, height);
   }
 
@@ -242,6 +246,7 @@ export class FirefoxClient {
     if (!this.pages) {
       throw new Error('Not connected');
     }
+    this.getContext();
     return await this.pages.acceptDialog(promptText);
   }
 
@@ -249,6 +254,7 @@ export class FirefoxClient {
     if (!this.pages) {
       throw new Error('Not connected');
     }
+    this.getContext();
     return await this.pages.dismissDialog();
   }
 
@@ -477,9 +483,8 @@ export class FirefoxClient {
   }
 
   /**
-   * Ensure Firefox is still connected with a usable tab selected.
-   * If the previously selected tab is gone, recovers by switching to another
-   * tab or opening a new one. Returns false if the connection is unrecoverable.
+   * Ensure Firefox is still connected. If the selected tab was closed, no tab
+   * is selected afterwards. Returns false if the connection is unrecoverable.
    */
   async ensureConnected(): Promise<boolean> {
     return await this.core.ensureConnected();

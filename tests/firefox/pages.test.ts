@@ -379,6 +379,16 @@ describe('PageManagement', () => {
       expect(pages.getSelectedTabIdx()).toBe(0);
     });
 
+    it('refreshTabs selects no tab when no tab is selected', async () => {
+      const { driver, sendBiDiCommand } = createTabMocks({});
+      const pages = new PageManagement(driver, () => null, vi.fn(), sendBiDiCommand as any);
+
+      await pages.refreshTabs();
+
+      expect(pages.getTabs()).toHaveLength(3);
+      expect(pages.getSelectedTabIdx()).toBe(-1);
+    });
+
     it('refreshTabs falls back to the current tab when the tree cannot be read', async () => {
       const { pages, sendBiDiCommand } = createTabMocks({});
       sendBiDiCommand.mockRejectedValueOnce(new Error('unsupported operation'));

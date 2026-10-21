@@ -60,54 +60,106 @@ describe('FirefoxCore', () => {
     });
 
     it('should return true when the current tab is still available', async () => {
-      const getWindowHandle = vi.fn().mockResolvedValue('current-tab');
-      const getAllWindowHandles = vi.fn();
+      const switchTo = vi.fn();
       const core = new FirefoxCore({ headless: true });
-      (core as any).driver = { getWindowHandle, getAllWindowHandles };
+      (core as any).driver = {
+        getWindowHandle: vi.fn().mockResolvedValue('current-tab'),
+        getAllWindowHandles: vi.fn().mockResolvedValue(['other-tab', 'current-tab']),
+        switchTo,
+      };
+      core.setCurrentContextId('current-tab');
 
       const connected = await core.ensureConnected();
 
       expect(connected).toBe(true);
-      expect(getAllWindowHandles).not.toHaveBeenCalled();
+      expect(switchTo).not.toHaveBeenCalled();
+      expect(core.getCurrentContextId()).toBe('current-tab');
     });
 
-    it('should switch to the first available tab when the current tab is gone', async () => {
-      const window = vi.fn().mockResolvedValue(undefined);
-      const newWindow = vi.fn();
+    describe('when the selected tab is no longer listed', () => {
+      function createClosedTabCore(remaining: string[], getWindowHandle?: () => unknown) {
+        const switchTo = vi.fn();
+        const core = new FirefoxCore({ headless: true });
+        (core as any).driver = {
+          getWindowHandle: vi.fn(
+            getWindowHandle ?? (() => Promise.reject(new Error('no such window')))
+          ),
+          getAllWindowHandles: vi.fn().mockResolvedValue(remaining),
+          switchTo,
+        };
+        (core as any).knownHandles = ['tab-1', 'tab-2'];
+        core.setCurrentContextId('tab-2');
+        return { core, switchTo };
+      }
+
+      it('should leave no tab selected instead of switching to another tab', async () => {
+        const { core, switchTo } = createClosedTabCore(['tab-1']);
+
+        expect(await core.ensureConnected()).toBe(true);
+        expect(switchTo).not.toHaveBeenCalled();
+        expect(core.getCurrentContextId()).toBe(null);
+      });
+
+      it('should not follow a tab that replaced it', async () => {
+        // For example a tab the user opened, or one an extension reopened.
+        const { core, switchTo } = createClosedTabCore(['tab-1', 'tab-3']);
+
+        expect(await core.ensureConnected()).toBe(true);
+        expect(switchTo).not.toHaveBeenCalled();
+        expect(core.getCurrentContextId()).toBe(null);
+      });
+
+      it('should treat a known tab as closed even if its handle still answers', async () => {
+        const { core } = createClosedTabCore(['tab-1'], () => Promise.resolve('tab-2'));
+
+        expect(await core.ensureConnected()).toBe(true);
+        expect(core.getCurrentContextId()).toBe(null);
+      });
+
+      it('should not open a new tab when all tabs have been closed', async () => {
+        const { core, switchTo } = createClosedTabCore([]);
+
+        expect(await core.ensureConnected()).toBe(true);
+        expect(switchTo).not.toHaveBeenCalled();
+        expect(core.getCurrentContextId()).toBe(null);
+      });
+
+      it('should leave no tab selected when a tab opened since the last check is gone', async () => {
+        const { core } = createClosedTabCore(['tab-1', 'tab-2']);
+        core.setCurrentContextId('tab-new');
+
+        expect(await core.ensureConnected()).toBe(true);
+        expect(core.getCurrentContextId()).toBe(null);
+      });
+    });
+
+    it('should leave no context selected when a selected privileged context is gone', async () => {
+      const switchTo = vi.fn();
       const core = new FirefoxCore({ headless: true });
       (core as any).driver = {
         getWindowHandle: vi.fn().mockRejectedValue(new Error('no such window')),
-        getAllWindowHandles: vi.fn().mockResolvedValue(['tab-1', 'tab-2']),
-        switchTo: vi.fn().mockReturnValue({ window, newWindow }),
+        getAllWindowHandles: vi.fn().mockResolvedValue(['tab-1']),
+        switchTo,
       };
+      (core as any).knownHandles = ['tab-1'];
+      core.setCurrentContextId('chrome-window');
 
-      const connected = await core.ensureConnected();
-
-      expect(connected).toBe(true);
-      expect(window).toHaveBeenCalledWith('tab-1');
-      expect(newWindow).not.toHaveBeenCalled();
-      expect(core.getCurrentContextId()).toBe('tab-1');
+      expect(await core.ensureConnected()).toBe(true);
+      expect(switchTo).not.toHaveBeenCalled();
+      expect(core.getCurrentContextId()).toBe(null);
     });
 
-    it('should open a new tab when all tabs have been closed', async () => {
-      const window = vi.fn();
-      const newWindow = vi.fn().mockResolvedValue(undefined);
+    it('should keep a selected privileged context that is still open', async () => {
       const core = new FirefoxCore({ headless: true });
       (core as any).driver = {
-        getWindowHandle: vi
-          .fn()
-          .mockRejectedValueOnce(new Error('no such window'))
-          .mockResolvedValueOnce('new-tab'),
-        getAllWindowHandles: vi.fn().mockResolvedValue([]),
-        switchTo: vi.fn().mockReturnValue({ window, newWindow }),
+        getWindowHandle: vi.fn().mockResolvedValue('chrome-window'),
+        getAllWindowHandles: vi.fn().mockResolvedValue(['tab-1']),
       };
+      (core as any).knownHandles = ['tab-1'];
+      core.setCurrentContextId('chrome-window');
 
-      const connected = await core.ensureConnected();
-
-      expect(connected).toBe(true);
-      expect(newWindow).toHaveBeenCalledWith('tab');
-      expect(window).not.toHaveBeenCalled();
-      expect(core.getCurrentContextId()).toBe('new-tab');
+      expect(await core.ensureConnected()).toBe(true);
+      expect(core.getCurrentContextId()).toBe('chrome-window');
     });
 
     it('should return false when listing tabs fails', async () => {
@@ -116,22 +168,7 @@ describe('FirefoxCore', () => {
         getWindowHandle: vi.fn().mockRejectedValue(new Error('no such window')),
         getAllWindowHandles: vi.fn().mockRejectedValue(new Error('not responsive')),
       };
-
-      const connected = await core.ensureConnected();
-
-      expect(connected).toBe(false);
-    });
-
-    it('should return false when switching to another tab fails', async () => {
-      const core = new FirefoxCore({ headless: true });
-      (core as any).driver = {
-        getWindowHandle: vi.fn().mockRejectedValue(new Error('no such window')),
-        getAllWindowHandles: vi.fn().mockResolvedValue(['tab-1']),
-        switchTo: vi.fn().mockReturnValue({
-          window: vi.fn().mockRejectedValue(new Error('not responsive')),
-          newWindow: vi.fn(),
-        }),
-      };
+      core.setCurrentContextId('tab-1');
 
       const connected = await core.ensureConnected();
 
@@ -351,6 +388,7 @@ describe('FirefoxCore connect() profile handling', () => {
         build = vi.fn().mockResolvedValue({
           getCapabilities: vi.fn(() => ({ get: vi.fn(() => '123.4') })),
           getWindowHandle: vi.fn().mockResolvedValue('mock-context-id'),
+          getAllWindowHandles: vi.fn().mockResolvedValue(['mock-context-id']),
           get: vi.fn().mockResolvedValue(undefined),
         });
       },

@@ -161,6 +161,7 @@ describe('FirefoxCore connect() BiDi endpoint check', () => {
       get: vi.fn((name: string) => capabilityValues[name]),
     }),
     getWindowHandle: vi.fn().mockResolvedValue('mock-context-id'),
+    getAllWindowHandles: vi.fn().mockResolvedValue(['mock-context-id']),
     get: vi.fn().mockResolvedValue(undefined),
   });
 

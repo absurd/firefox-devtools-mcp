@@ -176,4 +176,22 @@ describe('Tab Management Integration Tests', () => {
     expect(typeof selectedIdx).toBe('number');
     expect(selectedIdx).toBeGreaterThanOrEqual(0);
   }, 10000);
+
+  it('should not run tools in another tab after the selected tab was closed', async () => {
+    await firefox.createNewPage(fixtureUrl('form.html'));
+    const closed = firefox.getCurrentContextId();
+    // Close the tab behind the server's back, like a user closing it.
+    await firefox.sendBiDiCommand('browsingContext.close', { context: closed! });
+
+    expect(await firefox.ensureConnected()).toBe(true);
+    await expect(firefox.evaluate('window.location.href')).rejects.toThrow(
+      'the selected page was closed'
+    );
+    await firefox.refreshTabs();
+    expect(firefox.getSelectedTabIdx()).toBe(-1);
+
+    const fixturePath = fixtureUrl('simple.html');
+    await firefox.createNewPage(fixturePath);
+    expect(await firefox.evaluate('window.location.href')).toBe(fixturePath);
+  }, 20000);
 });

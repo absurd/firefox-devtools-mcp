@@ -59,4 +59,16 @@ describe('Privileged context state consistency', () => {
     // currentContextId to 'chrome-context-id'
     expect(mockSetCurrentContextId).toHaveBeenCalledWith('chrome-context-id');
   });
+
+  it('list_extensions should return to content when no page is selected', async () => {
+    mockCurrentContextId = null;
+    mockExecuteAsyncScript.mockResolvedValue([]);
+    const { handleListExtensions } = await import('../../src/tools/webextension.js');
+
+    await handleListExtensions({});
+
+    expect(mockSetContext).toHaveBeenLastCalledWith('content');
+    expect(mockSwitchToWindow).toHaveBeenCalledTimes(1);
+    expect(mockSwitchToWindow).toHaveBeenCalledWith('chrome-context-id');
+  });
 });

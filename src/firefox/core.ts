@@ -159,6 +159,9 @@ const BINARY_NOT_FOUND_HINT =
 
 export class FirefoxCore {
   private currentContextId: string | null = null;
+  // Tab handles as of the last check, to tell a closed tab from a context that
+  // is never listed as a tab, such as a privileged (chrome) context.
+  private knownHandles: string[] = [];
   private detectedBinaryPath: string | undefined;
   private driver: WebDriver | null = null;
   private firefoxVersion: string | null = null;
@@ -439,6 +442,7 @@ export class FirefoxCore {
 
     // Remember current window handle (browsing context)
     this.currentContextId = await this.driver.getWindowHandle();
+    this.knownHandles = await this.driver.getAllWindowHandles();
     logDebug(`Browsing context ID: ${this.currentContextId}`);
 
     if (resolvedMarionettePort !== undefined) {
@@ -468,9 +472,10 @@ export class FirefoxCore {
   }
 
   /**
-   * Ensure Firefox is still connected with a usable tab selected.
-   * If the previously selected tab is gone, recovers by switching to another
-   * tab or opening a new one. Returns false if the connection is unrecoverable.
+   * Ensure Firefox is still connected. If the selected tab was closed, no tab
+   * is selected afterwards: tools that act on a page fail until another one is
+   * selected, instead of silently running in (and focusing) another tab.
+   * Returns false if the connection is unrecoverable.
    */
   async ensureConnected(): Promise<boolean> {
     if (!this.driver) {
@@ -478,36 +483,33 @@ export class FirefoxCore {
     }
 
     try {
-      await this.driver.getWindowHandle();
-      return true;
-    } catch (e) {
-      logDebug('Previously selected tab is no longer available', e);
-    }
-
-    try {
-      const tabs = await this.driver.getAllWindowHandles();
-      if (tabs.length) {
-        logDebug('Switching to the first tab');
-        for (const tab of tabs) {
-          if (typeof tab === 'string') {
-            await this.driver.switchTo().window(tab);
-            this.currentContextId = tab;
-            return true;
-          }
-        }
-      } else {
-        logDebug('All tabs have been closed, switching to a new tab');
-        await this.driver.switchTo().newWindow('tab');
-        this.currentContextId = await this.driver.getWindowHandle();
+      const handles = await this.driver.getAllWindowHandles();
+      const selected = this.currentContextId;
+      if (!selected || handles.includes(selected)) {
+        this.knownHandles = handles;
         return true;
       }
+
+      // A known tab that is no longer listed was closed, even if its handle
+      // still answers for a moment. Anything else is checked directly.
+      if (!this.knownHandles.includes(selected)) {
+        try {
+          await this.driver.getWindowHandle();
+          this.knownHandles = handles;
+          return true;
+        } catch (e) {
+          logDebug('Selected context is no longer available', e);
+        }
+      }
+
+      logDebug(`Selected tab ${selected} was closed, no tab is selected now`);
+      this.currentContextId = null;
+      this.knownHandles = handles;
+      return true;
     } catch (e) {
       logDebug('Connection check failed: Firefox is not responsive', e);
       return false;
     }
-
-    logDebug('Unable to select a tab to the connected Firefox instance, restarting');
-    return false;
   }
 
   /**

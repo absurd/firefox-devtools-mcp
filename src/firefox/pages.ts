@@ -160,10 +160,13 @@ export class PageManagement {
         }))
       );
       const currentId = this.getCurrentContextId();
-      this.cachedSelectedIdx = Math.max(
-        0,
-        this.cachedTabs.findIndex((tab) => tab.actor === currentId)
-      );
+      this.cachedSelectedIdx =
+        currentId === null
+          ? -1
+          : Math.max(
+              0,
+              this.cachedTabs.findIndex((tab) => tab.actor === currentId)
+            );
     } catch (error) {
       log(`Error refreshing tabs: ${error instanceof Error ? error.message : String(error)}`);
       // Fallback to single tab

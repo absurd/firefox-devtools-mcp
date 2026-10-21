@@ -24,6 +24,10 @@ export class FirefoxDisconnectedError extends Error {
   }
 }
 
+/** Thrown by tools that act on the selected page when no page is selected. */
+export const NO_SELECTED_PAGE_MESSAGE =
+  'No page is selected: the selected page was closed. Use list_pages, then select_page or new_page.';
+
 /**
  * Check if an error indicates Firefox disconnection
  */

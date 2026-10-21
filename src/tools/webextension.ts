@@ -329,9 +329,11 @@ export const handleListExtensions = defineToolHandler(
       } finally {
         // Restore previous context (skip if already on the right chrome context)
         try {
-          if (originalContextId && originalContextId !== chromeContextId) {
+          if (originalContextId !== chromeContextId) {
             await driver.setContext('content');
-            await driver.switchTo().window(originalContextId);
+            if (originalContextId) {
+              await driver.switchTo().window(originalContextId);
+            }
           }
         } catch {
           // Ignore errors restoring context
