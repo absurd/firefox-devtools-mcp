@@ -1,6 +1,7 @@
 import type { BrowsingContext } from 'webdriver-bidi-protocol';
 import { successResponse, errorResponse } from '../utils/response-helpers.js';
 import { compareVersions } from '../utils/version.js';
+import { NO_SELECTED_PAGE_MESSAGE } from '../utils/errors.js';
 import type { FirefoxDevTools } from '../firefox/index.js';
 import { defineModule, defineToolHandler, type ToolDefinition } from './module.js';
 import type { McpToolResponse } from '../types/common.js';
@@ -79,7 +80,7 @@ export const handleScreencastStart = defineToolHandler(
 
     const contextId = context ?? firefox.getCurrentContextId();
     if (!contextId) {
-      throw new Error('No active browsing context to record');
+      throw new Error(NO_SELECTED_PAGE_MESSAGE);
     }
 
     const params: BrowsingContext.StartScreencastParameters = { context: contextId };

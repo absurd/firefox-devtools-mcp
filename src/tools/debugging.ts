@@ -1,6 +1,7 @@
 import { successResponse, errorResponse } from '../utils/response-helpers.js';
 import { compareVersions } from '../utils/version.js';
 import { remoteValueToNative } from '../utils/remote-value.js';
+import { NO_SELECTED_PAGE_MESSAGE } from '../utils/errors.js';
 import { defineModule, defineToolHandler, type ToolDefinition } from './module.js';
 import type { McpToolResponse } from '../types/common.js';
 
@@ -17,7 +18,7 @@ function requireDebuggingSupport(firefox: { getFirefoxVersion(): string | null }
 
 function requireContext(contextId: string | null): string {
   if (!contextId) {
-    throw new Error('No active browsing context');
+    throw new Error(NO_SELECTED_PAGE_MESSAGE);
   }
   return contextId;
 }

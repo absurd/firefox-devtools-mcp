@@ -143,7 +143,7 @@ describe('Screencast Tool Handlers', () => {
       const result = await handleScreencastStart({});
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('No active browsing context');
+      expect(result.content[0].text).toContain('No page is selected');
     });
 
     it('should return error when BiDi command fails', async () => {

@@ -7,6 +7,7 @@ import { successResponse, errorResponse, previewExcerpt } from '../utils/respons
 import { remoteValueToNative } from '../utils/remote-value.js';
 import { validateFunction } from '../utils/js-validation.js';
 import { saveOutput } from '../utils/save-output.js';
+import { NO_SELECTED_PAGE_MESSAGE } from '../utils/errors.js';
 import { defineModule, defineToolHandler, type ToolDefinition } from './module.js';
 import type { McpToolResponse } from '../types/common.js';
 
@@ -122,7 +123,7 @@ export const handleEvaluateScript = defineToolHandler(
     // Execute with resolved args (empty array if no args)
     const context = firefox.getCurrentContextId();
     if (!context) {
-      throw new Error('No active browsing context');
+      throw new Error(NO_SELECTED_PAGE_MESSAGE);
     }
     const callFunctionPromise = firefox.sendBiDiCommand('script.callFunction', {
       functionDeclaration: fnString,

@@ -5,6 +5,7 @@
 import type { BrowsingContext } from 'webdriver-bidi-protocol';
 import { successResponse, previewExcerpt, truncationFooter } from '../utils/response-helpers.js';
 import { saveOutput } from '../utils/save-output.js';
+import { NO_SELECTED_PAGE_MESSAGE } from '../utils/errors.js';
 import { READINESS_STATES, isReadinessState } from '../firefox/pages.js';
 import {
   defineModule,
@@ -251,7 +252,7 @@ export const handleNavigatePage = defineToolHandler(async function handleNavigat
   const page = tabs[selectedIdx];
 
   if (!page) {
-    throw new Error('No page selected');
+    throw new Error(NO_SELECTED_PAGE_MESSAGE);
   }
 
   await firefox.navigate(url, waitFor);

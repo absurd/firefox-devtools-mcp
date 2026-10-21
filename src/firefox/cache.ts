@@ -1,5 +1,6 @@
 import type { Network } from 'webdriver-bidi-protocol';
 import type { BiDiFacade } from './bidi';
+import { NO_SELECTED_PAGE_MESSAGE } from '../utils/errors.js';
 
 /**
  * WebDriver BiDi network.CacheBehavior.
@@ -28,7 +29,7 @@ export class CacheManagement {
     if (!options?.global) {
       const contextId = this.getCurrentContextId();
       if (!contextId) {
-        throw new Error('Cannot set cache behavior: no browsing context ID');
+        throw new Error(NO_SELECTED_PAGE_MESSAGE);
       }
       params.contexts = [contextId];
     }

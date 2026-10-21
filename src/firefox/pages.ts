@@ -6,6 +6,7 @@ import { WebDriver } from 'selenium-webdriver';
 import type { BrowsingContext } from 'webdriver-bidi-protocol';
 import { CreateType, ReadinessState, type BiDiFacade } from './bidi.js';
 import { log, logDebug } from '../utils/logger.js';
+import { NO_SELECTED_PAGE_MESSAGE } from '../utils/errors.js';
 
 const COMMON_URL_SCHEMES = ['http:', 'https:', 'data:', 'blob:', 'file:'];
 const PAGES_SANDBOX = 'page-management';
@@ -54,7 +55,7 @@ export class PageManagement {
   async navigate(url: string, waitOverride?: BrowsingContext.ReadinessState): Promise<void> {
     const contextId = this.getCurrentContextId();
     if (!contextId) {
-      throw new Error(`Cannot navigate: no browsing context ID`);
+      throw new Error(NO_SELECTED_PAGE_MESSAGE);
     }
 
     // Default wait time is "interactive" (DOMContentLoaded).
