@@ -177,6 +177,18 @@ describe('Tab Management Integration Tests', () => {
     expect(selectedIdx).toBeGreaterThanOrEqual(0);
   }, 10000);
 
+  it('should return to the previously selected tab when closing a new tab', async () => {
+    const formPath = fixtureUrl('form.html');
+    await firefox.createNewPage(formPath);
+    const opener = firefox.getCurrentContextId();
+
+    const newIdx = await firefox.createNewPage(fixtureUrl('simple.html'));
+    await firefox.closeTab(newIdx);
+
+    expect(firefox.getCurrentContextId()).toBe(opener);
+    expect(await firefox.evaluate('window.location.href')).toBe(formPath);
+  }, 20000);
+
   it('should not run tools in another tab after the selected tab was closed', async () => {
     await firefox.createNewPage(fixtureUrl('form.html'));
     const closed = firefox.getCurrentContextId();

@@ -522,7 +522,7 @@ export class FirefoxCore {
   /**
    * Update current context ID (used by page management)
    */
-  setCurrentContextId(contextId: string): void {
+  setCurrentContextId(contextId: string | null): void {
     this.currentContextId = contextId;
   }
 

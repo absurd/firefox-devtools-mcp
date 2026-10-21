@@ -330,8 +330,17 @@ export const handleClosePage = defineToolHandler(async function handleClosePage(
     throw new Error(`Page with index ${pageIdx} not found`);
   }
 
+  const selectedBefore = firefox.getCurrentContextId();
   await firefox.closeTab(pageIdx);
 
+  if (firefox.getCurrentContextId() === null) {
+    return successResponse(
+      `closed [${pageIdx}]. No page is selected now: use select_page or new_page.`
+    );
+  }
+  if (firefox.getCurrentContextId() !== selectedBefore) {
+    return successResponse(`closed [${pageIdx}], selected [${firefox.getSelectedTabIdx()}]`);
+  }
   return successResponse(`closed [${pageIdx}]`);
 });
 

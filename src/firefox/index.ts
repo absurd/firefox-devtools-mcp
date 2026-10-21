@@ -124,7 +124,7 @@ export class FirefoxClient {
     this.pages = new PageManagement(
       driver,
       () => this.core.getCurrentContextId(),
-      (id: string) => this.core.setCurrentContextId(id),
+      (id: string | null) => this.core.setCurrentContextId(id),
       (method, params) => this.getBidi().sendCommand(method, params)
     );
 

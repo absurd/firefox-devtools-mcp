@@ -40,7 +40,7 @@ export class PageManagement {
   constructor(
     private driver: WebDriver,
     private getCurrentContextId: () => string | null,
-    private setCurrentContextId: (id: string) => void,
+    private setCurrentContextId: (id: string | null) => void,
     private sendBiDiCommand: BiDiFacade['sendCommand']
   ) {}
 
@@ -130,6 +130,8 @@ export class PageManagement {
 
   private cachedTabs: Array<{ actor: string; title: string; url: string }> = [];
   private cachedSelectedIdx: number = 0;
+  // Tabs selected before, most recent last, to return to when the selected tab is closed.
+  private previousContextIds: string[] = [];
 
   /**
    * Get all tabs (window handles)
@@ -215,6 +217,7 @@ export class PageManagement {
   async selectTab(index: number): Promise<void> {
     const handle = this.cachedTabs[index]?.actor;
     if (handle) {
+      this.rememberPreviousTab(handle);
       await this.driver.switchTo().window(handle);
       this.setCurrentContextId(handle);
       this.cachedSelectedIdx = index;
@@ -228,6 +231,7 @@ export class PageManagement {
     const { context } = await this.sendBiDiCommand('browsingContext.create', {
       type: CreateType.Tab,
     });
+    this.rememberPreviousTab(context);
     // Dialog handling and tab switching still go through the classic driver.
     await this.driver.switchTo().window(context);
     this.setCurrentContextId(context);
@@ -241,16 +245,48 @@ export class PageManagement {
    */
   async closeTab(index: number): Promise<void> {
     const handle = this.cachedTabs[index]?.actor;
-    if (handle) {
-      await this.driver.switchTo().window(handle);
-      await this.driver.close();
-      this.cachedTabs = this.cachedTabs.filter((tab) => tab.actor !== handle);
-      const next = this.cachedTabs[0]?.actor;
-      if (next) {
-        await this.driver.switchTo().window(next);
-        this.setCurrentContextId(next);
-        this.cachedSelectedIdx = 0;
+    if (!handle) {
+      return;
+    }
+    // Closing with BiDi does not need to switch to the tab, which would focus it.
+    await this.sendBiDiCommand('browsingContext.close', { context: handle });
+    this.cachedTabs = this.cachedTabs.filter((tab) => tab.actor !== handle);
+
+    this.previousContextIds = this.previousContextIds.filter((id) =>
+      this.cachedTabs.some((tab) => tab.actor === id)
+    );
+
+    if (handle === this.getCurrentContextId()) {
+      let next: string | null = null;
+      for (let previous = this.previousContextIds.pop(); previous; ) {
+        try {
+          await this.driver.switchTo().window(previous);
+          next = previous;
+          break;
+        } catch (e) {
+          logDebug(`Previously selected tab ${previous} is gone`, e);
+          previous = this.previousContextIds.pop();
+        }
       }
+      this.setCurrentContextId(next);
+    }
+    const currentId = this.getCurrentContextId();
+    this.cachedSelectedIdx =
+      currentId === null
+        ? -1
+        : Math.max(
+            0,
+            this.cachedTabs.findIndex((tab) => tab.actor === currentId)
+          );
+  }
+
+  private rememberPreviousTab(next: string): void {
+    const current = this.getCurrentContextId();
+    if (current && current !== next) {
+      this.previousContextIds = [
+        ...this.previousContextIds.filter((id) => id !== current),
+        current,
+      ];
     }
   }
 }

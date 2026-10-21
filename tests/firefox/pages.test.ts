@@ -322,13 +322,13 @@ describe('PageManagement', () => {
       titles: Record<string, string>,
       { tree = TREE, currentId = 'tab-2' }: { tree?: typeof TREE; currentId?: string } = {}
     ) {
-      let current = currentId;
+      let current: string | null = currentId;
       const window = vi.fn().mockResolvedValue(undefined);
       const driver = {
         switchTo: vi.fn().mockReturnValue({ window }),
         close: vi.fn().mockResolvedValue(undefined),
       } as any;
-      const setCurrentContextId = vi.fn((id: string) => {
+      const setCurrentContextId = vi.fn((id: string | null) => {
         current = id;
       });
       const sendBiDiCommand = vi.fn(async (method: string, params: any) => {
@@ -338,7 +338,7 @@ describe('PageManagement', () => {
         if (method === 'browsingContext.create') {
           return { context: 'tab-new' };
         }
-        if (method === 'browsingContext.navigate') {
+        if (method === 'browsingContext.navigate' || method === 'browsingContext.close') {
           return {};
         }
         const title = titles[params.target.context];
@@ -429,51 +429,112 @@ describe('PageManagement', () => {
       expect(pages.getSelectedTabIdx()).toBe(1);
     });
 
-    it('closeTab closes the cached tab at that index and selects the first remaining one', async () => {
-      const { pages, driver, window, setCurrentContextId } = createTabMocks({});
+    it('closeTab closes another tab with BiDi and keeps the selection', async () => {
+      const { pages, driver, sendBiDiCommand, setCurrentContextId } = createTabMocks({});
       await pages.refreshTabs();
 
       await pages.closeTab(0);
 
-      expect(window).toHaveBeenNthCalledWith(1, 'tab-3');
-      expect(driver.close).toHaveBeenCalledOnce();
-      expect(window).toHaveBeenNthCalledWith(2, 'tab-1');
-      expect(setCurrentContextId).toHaveBeenCalledWith('tab-1');
+      expect(sendBiDiCommand).toHaveBeenCalledWith('browsingContext.close', { context: 'tab-3' });
+      expect(driver.switchTo).not.toHaveBeenCalled();
+      expect(driver.close).not.toHaveBeenCalled();
+      expect(setCurrentContextId).not.toHaveBeenCalled();
       expect(pages.getTabs().map((tab) => tab.actor)).toEqual(['tab-1', 'tab-2']);
+      expect(pages.getSelectedTabIdx()).toBe(1);
     });
 
-    it('closeTab on the current tab moves the selection to a remaining tab', async () => {
-      const { pages, driver, window } = createTabMocks({});
+    it('closeTab on the current tab returns to the previously selected tab', async () => {
+      const { pages, window, setCurrentContextId } = createTabMocks({});
+      await pages.refreshTabs();
+      await pages.selectTab(0);
+
+      await pages.closeTab(0);
+
+      expect(window).toHaveBeenLastCalledWith('tab-2');
+      expect(setCurrentContextId).toHaveBeenLastCalledWith('tab-2');
+      expect(pages.getTabs().map((tab) => tab.actor)).toEqual(['tab-1', 'tab-2']);
+      expect(pages.getSelectedTabIdx()).toBe(1);
+    });
+
+    it('closeTab on a new page returns to the tab selected before it', async () => {
+      const { pages, window } = createTabMocks(
+        {},
+        {
+          tree: [
+            { context: 'tab-1', url: 'https://example.com/a' },
+            { context: 'tab-2', url: 'https://example.com/b' },
+            { context: 'tab-new', url: HTTPS_URL },
+          ],
+        }
+      );
+
+      const index = await pages.createNewPage(HTTPS_URL);
+      await pages.closeTab(index);
+
+      expect(window).toHaveBeenLastCalledWith('tab-2');
+      expect(pages.getSelectedTabIdx()).toBe(1);
+    });
+
+    it('closeTab returns through the previously selected tabs in order', async () => {
+      const { pages, window } = createTabMocks({});
+      await pages.refreshTabs();
+      await pages.selectTab(1);
+      await pages.selectTab(0);
+
+      await pages.closeTab(0);
+      expect(window).toHaveBeenLastCalledWith('tab-1');
+
+      await pages.closeTab(0);
+      expect(window).toHaveBeenLastCalledWith('tab-2');
+      expect(pages.getTabs().map((tab) => tab.actor)).toEqual(['tab-2']);
+      expect(pages.getSelectedTabIdx()).toBe(0);
+    });
+
+    it('closeTab skips a previously selected tab that is gone', async () => {
+      const { pages, window } = createTabMocks({});
+      await pages.refreshTabs();
+      await pages.selectTab(1);
+      await pages.selectTab(0);
+      window.mockRejectedValueOnce(new Error('no such window'));
+
+      await pages.closeTab(0);
+
+      expect(window).toHaveBeenNthCalledWith(3, 'tab-1');
+      expect(window).toHaveBeenLastCalledWith('tab-2');
+      expect(pages.getSelectedTabIdx()).toBe(1);
+    });
+
+    it('closeTab on the current tab selects no tab when there is no previous one', async () => {
+      const { pages, driver, setCurrentContextId } = createTabMocks({});
       await pages.refreshTabs();
 
       await pages.closeTab(2);
 
-      expect(window).toHaveBeenNthCalledWith(1, 'tab-2');
-      expect(driver.close).toHaveBeenCalledOnce();
-      expect(window).toHaveBeenNthCalledWith(2, 'tab-3');
-      expect(pages.getSelectedTabIdx()).toBe(0);
+      expect(driver.switchTo).not.toHaveBeenCalled();
+      expect(setCurrentContextId).toHaveBeenCalledWith(null);
+      expect(pages.getSelectedTabIdx()).toBe(-1);
       expect(pages.getTabs().map((tab) => tab.actor)).toEqual(['tab-3', 'tab-1']);
     });
 
     it('ignores indexes outside the cached list', async () => {
-      const { pages, driver } = createTabMocks({});
+      const { pages, driver, sendBiDiCommand } = createTabMocks({});
       await pages.refreshTabs();
 
       await pages.selectTab(3);
       await pages.closeTab(-1);
 
       expect(driver.switchTo).not.toHaveBeenCalled();
-      expect(driver.close).not.toHaveBeenCalled();
+      expect(sendBiDiCommand).not.toHaveBeenCalledWith('browsingContext.close', expect.anything());
     });
 
     it('does nothing when the tab list was never refreshed', async () => {
-      const { pages, driver } = createTabMocks({});
+      const { pages, driver, sendBiDiCommand } = createTabMocks({});
 
       await pages.selectTab(0);
       await pages.closeTab(0);
 
       expect(driver.switchTo).not.toHaveBeenCalled();
-      expect(driver.close).not.toHaveBeenCalled();
+      expect(sendBiDiCommand).not.toHaveBeenCalled();
     });
   });
 });
